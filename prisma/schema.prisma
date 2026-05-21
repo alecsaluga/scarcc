@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============================================
+// CREATOR MODELS
+// ============================================
+
+model Creator {
+  id            String   @id @default(cuid())
+  name          String
+  tiktokHandle  String   @unique
+  slug          String   @unique
+  email         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  portalCredential  PortalCredential?
+  agreement         Agreement?
+  uploadedVideos    UploadedVideo[]
+  opportunities     Opportunity[]
+  brandOnboardings  BrandOnboarding[]
+  selfTrackedDeals  SelfTrackedDeal[]
+}
+
+model PortalCredential {
+  id              String   @id @default(cuid())
+  creatorId       String   @unique
+  passwordHash    String
+  onboardingStep  Int      @default(1)
+  onboardingComplete Boolean @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+}
+
+model Agreement {
+  id              String   @id @default(cuid())
+  creatorId       String   @unique
+  acceptedAt      DateTime
+  version         String
+  agreementText   String
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// VIDEO & EXTRACTION MODELS
+// ============================================
+
+model UploadedVideo {
+  id              String   @id @default(cuid())
+  creatorId       String
+  filename        String
+  blobUrl         String
+  fileHash        String
+  fileSize        Int
+  mimeType        String
+  status          String   @default("PENDING")
+  analysisError   String?
+  rawExtraction   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creator          Creator           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  extractedProducts ExtractedProduct[]
+
+  @@index([fileHash])
+  @@index([creatorId])
+}
+
+model ExtractedProduct {
+  id              String   @id @default(cuid())
+  videoId         String
+  brandName       String   @default("")
+  productName     String
+  gmv             Float
+  itemsSold       Int
+  confidence      Float
+  notes           String?
+  productHash     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  video       UploadedVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  opportunity Opportunity?
+
+  @@index([productHash])
+  @@index([videoId])
+}
+
+// ============================================
+// OPPORTUNITY / DEAL MODELS
+// ============================================
+
+model Opportunity {
+  id                  String   @id @default(cuid())
+  creatorId           String
+  extractedProductId  String?  @unique
+
+  brand               String
+  productName         String
+  tiktokShopLink      String?
+  dealAmount          Float?
+
+  bestContact         String?
+  bestContactMethod   String?
+
+  stage               String   @default("ENRICHMENT")
+  creatorDecision     String   @default("PENDING")
+
+  deliveryStatus      String   @default("NOT_STARTED")
+  videosCommitted     Int      @default(0)
+  videosDelivered     Int      @default(0)
+  deliveryNotes       String?
+
+  notes               String?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  closedAt            DateTime?
+
+  creator          Creator          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  extractedProduct ExtractedProduct? @relation(fields: [extractedProductId], references: [id])
+  tasks            Task[]
+
+  @@index([creatorId])
+  @@index([stage])
+}
+
+// ============================================
+// TASK MODEL
+// ============================================
+
+model Task {
+  id              String   @id @default(cuid())
+  opportunityId   String
+
+  title           String
+  channel         String?
+  stage           String
+  dueDate         DateTime
+  completed       Boolean  @default(false)
+  completedAt     DateTime?
+  isManual        Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+  @@index([dueDate])
+  @@index([completed])
+}
+
+// ============================================
+// BRAND ONBOARDING (Creator Portal)
+// ============================================
+
+model BrandOnboarding {
+  id              String   @id @default(cuid())
+  creatorId       String
+  brand           String
+
+  hasRetainer     Boolean?
+  hasUsageRights  Boolean?
+  shopName        String?
+  bestContactMethod String?
+  bestContactName String?
+  bestContactDetails String?
+
+  completed       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, brand])
+  @@index([creatorId])
+}
+
+// ============================================
+// CREATOR SELF-TRACKED DEALS
+// ============================================
+
+model SelfTrackedDeal {
+  id              String   @id @default(cuid())
+  creatorId       String
+
+  brandName       String
+  monthlyVideosRequired Int @default(0)
+  completedVideos Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+}
