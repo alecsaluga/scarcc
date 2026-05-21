@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Upload, Video, CheckCircle, AlertCircle, X } from 'lucide-react'
+import { upload } from '@vercel/blob/client'
 
 type UploadState = 'idle' | 'uploading' | 'analyzing' | 'success' | 'error'
 
@@ -18,6 +19,13 @@ interface UploadResult {
   opportunitiesCreated?: number
   duplicate?: boolean
   error?: string
+}
+
+interface UploadedBlob {
+  url: string
+  filename: string
+  size: number
+  contentType: string
 }
 
 export default function CreatorUploadPage() {
@@ -81,27 +89,45 @@ export default function CreatorUploadPage() {
     setCurrentFileIndex(0)
 
     try {
-      const formData = new FormData()
-      formData.append('name', name.trim())
-      formData.append('tiktokHandle', tiktokHandle.trim().replace('@', ''))
+      // Step 1: Upload all videos directly to Vercel Blob (client-side)
+      const uploadedBlobs: UploadedBlob[] = []
 
-      // Append all video files
-      videoFiles.forEach((file, index) => {
-        formData.append(`video_${index}`, file)
-      })
-      formData.append('videoCount', String(videoFiles.length))
+      for (let i = 0; i < videoFiles.length; i++) {
+        setCurrentFileIndex(i)
+        const file = videoFiles[i]
 
+        const blob = await upload(file.name, file, {
+          access: 'public',
+          handleUploadUrl: '/api/upload-token',
+        })
+
+        uploadedBlobs.push({
+          url: blob.url,
+          filename: file.name,
+          size: file.size,
+          contentType: file.type || 'video/mp4',
+        })
+      }
+
+      // Step 2: Send blob URLs to process API for analysis
       setUploadState('analyzing')
 
-      const response = await fetch('/api/upload', {
+      const response = await fetch('/api/process', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          tiktokHandle: tiktokHandle.trim().replace('@', ''),
+          videos: uploadedBlobs,
+        }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Upload failed')
+        throw new Error(data.error || 'Processing failed')
       }
 
       setResult(data)
@@ -297,7 +323,7 @@ export default function CreatorUploadPage() {
                     </div>
                     <p className="text-sm text-gray-500 text-center mt-3">
                       {uploadState === 'uploading'
-                        ? `Uploading ${videoFiles.length} video${videoFiles.length !== 1 ? 's' : ''}...`
+                        ? `Uploading video ${currentFileIndex + 1} of ${videoFiles.length}...`
                         : `Analyzing products across ${videoFiles.length} recording${videoFiles.length !== 1 ? 's' : ''}...`}
                     </p>
                   </div>

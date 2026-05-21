@@ -18,6 +18,7 @@ export interface AnalysisResult {
 
 export interface AnalysisProvider {
   analyzeVideo(filePath: string, creatorName: string, filename: string): Promise<AnalysisResult>
+  analyzeVideoFromUrl(url: string, creatorName: string, filename: string): Promise<AnalysisResult>
 }
 
 // Gemini implementation using Files API (matches reference implementation)
@@ -52,10 +53,74 @@ export class GeminiAnalysisProvider implements AnalysisProvider {
         await sleep(5000)
         fileStatus = await this.getGeminiFile(uploadedFile.name)
       }
-      console.log('[Gemini] File is ACTIVE, starting two-pass extraction...')
+      console.log('[Gemini] File is ACTIVE, starting extraction...')
 
-      // PASS 1: Count products first
-      const countPrompt = `
+      // Use shared extraction logic
+      return this.runExtraction(fileStatus, creatorName, filename)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[Gemini] Error:', errorMessage)
+      return {
+        success: false,
+        products: [],
+        rawExtraction: '',
+        error: errorMessage
+      }
+    }
+  }
+
+  async analyzeVideoFromUrl(url: string, creatorName: string, filename: string): Promise<AnalysisResult> {
+    try {
+      console.log('[Gemini] Starting URL-based video analysis for:', filename)
+
+      // Fetch the video from the URL
+      console.log('[Gemini] Fetching video from Blob URL...')
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch video: ${response.statusText}`)
+      }
+
+      const arrayBuffer = await response.arrayBuffer()
+      const fileBuffer = Buffer.from(arrayBuffer)
+      const mimeType = getMimeType(filename)
+
+      console.log('[Gemini] Video fetched, size:', fileBuffer.length, 'bytes')
+
+      // Upload to Gemini Files API
+      console.log('[Gemini] Uploading file to Gemini Files API...')
+      const uploadedFile = await this.uploadFileToGemini(fileBuffer, mimeType)
+      console.log('[Gemini] File uploaded:', uploadedFile.name)
+
+      // Poll until file is ACTIVE
+      let fileStatus = uploadedFile
+      while (!fileStatus.state || fileStatus.state.toString() !== 'ACTIVE') {
+        if (fileStatus.state && fileStatus.state.toString() === 'FAILED') {
+          throw new Error('Gemini could not process this uploaded video.')
+        }
+
+        console.log('[Gemini] Waiting for file to become ACTIVE...')
+        await sleep(5000)
+        fileStatus = await this.getGeminiFile(uploadedFile.name)
+      }
+      console.log('[Gemini] File is ACTIVE, starting extraction...')
+
+      // Use the same extraction logic as analyzeVideo
+      return this.runExtraction(fileStatus, creatorName, filename)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[Gemini] Error:', errorMessage)
+      return {
+        success: false,
+        products: [],
+        rawExtraction: '',
+        error: errorMessage
+      }
+    }
+  }
+
+  private async runExtraction(fileStatus: GeminiFile, creatorName: string, filename: string): Promise<AnalysisResult> {
+    // PASS 1: Count products first
+    const countPrompt = `
 Watch this entire TikTok Shop analytics screen recording from start to finish.
 Count the TOTAL number of unique product listings that appear as the creator scrolls.
 Each row in the analytics dashboard = 1 product.
@@ -66,18 +131,18 @@ Return ONLY a JSON object with the count:
 Watch the ENTIRE video - products appear throughout as the user scrolls.
 `.trim()
 
-      const countResponse = await this.callGemini(fileStatus, countPrompt)
-      let expectedCount = 0
-      try {
-        const countParsed = this.parseJsonResponse(countResponse)
-        expectedCount = (countParsed as { totalProducts?: number }).totalProducts || 0
-        console.log('[Gemini] Pass 1 - Expected product count:', expectedCount)
-      } catch {
-        console.log('[Gemini] Could not parse count, proceeding with extraction')
-      }
+    const countResponse = await this.callGemini(fileStatus, countPrompt)
+    let expectedCount = 0
+    try {
+      const countParsed = this.parseJsonResponse(countResponse)
+      expectedCount = (countParsed as { totalProducts?: number }).totalProducts || 0
+      console.log('[Gemini] Pass 1 - Expected product count:', expectedCount)
+    } catch {
+      console.log('[Gemini] Could not parse count, proceeding with extraction')
+    }
 
-      // PASS 2: Extract all products
-      const extractPrompt = `
+    // PASS 2: Extract all products
+    const extractPrompt = `
 You are extracting e-commerce product analytics from a TikTok Shop creator's screen recording.
 
 Watch the ENTIRE video from start to finish. This is a SCROLLING recording - products appear and disappear as the creator scrolls through their analytics dashboard.
@@ -100,7 +165,6 @@ BRAND NAME RULES (CRITICAL):
 - RIGHT: "Shark", "Ninja", "Dyson", "VEVOR", "KitchenAid", "Rhino USA", "GCI Outdoor"
 - Look for the brand at the START of the product name (e.g., "Shark StainForce..." → brand is "Shark")
 - If no clear brand is visible, look for seller/shop name or use "Unknown"
-- Common TikTok Shop brands: Shark, Ninja, Dyson, VEVOR, KitchenAid, Trucozie, HEYDUDE, Rhino USA, Hieha, Sealegend, HydroDuo, Timber Ridge, GCI Outdoor, Fanttik, ANPABO, Povasee, Sleek Socket, Cascade Pro
 
 EXTRACTION RULES:
 1. FULL PRODUCT NAMES - Include the COMPLETE product name exactly as shown
@@ -113,20 +177,20 @@ The source file is "${filename}".
 Return ALL products visible in the video as a JSON array.
 `.trim()
 
-      const rawText = await this.callGemini(fileStatus, extractPrompt)
-      console.log('[Gemini] Pass 2 - Raw response:', rawText.substring(0, 200) + '...')
+    const rawText = await this.callGemini(fileStatus, extractPrompt)
+    console.log('[Gemini] Pass 2 - Raw response:', rawText.substring(0, 200) + '...')
 
-      // Parse JSON response
-      const parsed = this.parseJsonResponse(rawText)
-      let items = Array.isArray(parsed) ? parsed : [parsed]
-      console.log('[Gemini] Pass 2 - Extracted', items.length, 'products')
+    // Parse JSON response
+    const parsed = this.parseJsonResponse(rawText)
+    let items = Array.isArray(parsed) ? parsed : [parsed]
+    console.log('[Gemini] Pass 2 - Extracted', items.length, 'products')
 
-      // PASS 3: Verification - if count mismatch, do another pass to find missing
-      if (expectedCount > 0 && items.length < expectedCount * 0.8) {
-        console.log('[Gemini] Pass 3 - Count mismatch! Expected ~' + expectedCount + ', got ' + items.length + '. Running verification pass...')
+    // PASS 3: Verification - if count mismatch, do another pass to find missing
+    if (expectedCount > 0 && items.length < expectedCount * 0.8) {
+      console.log('[Gemini] Pass 3 - Count mismatch! Expected ~' + expectedCount + ', got ' + items.length + '. Running verification pass...')
 
-        const existingNames = items.map((i: Record<string, unknown>) => String(i.productName || '')).slice(0, 20)
-        const verifyPrompt = `
+      const existingNames = items.map((i: Record<string, unknown>) => String(i.productName || '')).slice(0, 20)
+      const verifyPrompt = `
 I already extracted ${items.length} products but the video appears to have approximately ${expectedCount} products.
 
 Products I already found (first 20):
@@ -143,50 +207,40 @@ Return ONLY the MISSING products as a JSON array (same format as before):
 If no additional products are found, return an empty array: []
 `.trim()
 
-        try {
-          const verifyText = await this.callGemini(fileStatus, verifyPrompt)
-          const verifyParsed = this.parseJsonResponse(verifyText)
-          const additionalItems = Array.isArray(verifyParsed) ? verifyParsed : []
+      try {
+        const verifyText = await this.callGemini(fileStatus, verifyPrompt)
+        const verifyParsed = this.parseJsonResponse(verifyText)
+        const additionalItems = Array.isArray(verifyParsed) ? verifyParsed : []
 
-          if (additionalItems.length > 0) {
-            console.log('[Gemini] Pass 3 - Found', additionalItems.length, 'additional products')
-            items = [...items, ...additionalItems]
-          }
-        } catch (e) {
-          console.log('[Gemini] Pass 3 - Verification pass failed, using original results')
+        if (additionalItems.length > 0) {
+          console.log('[Gemini] Pass 3 - Found', additionalItems.length, 'additional products')
+          items = [...items, ...additionalItems]
         }
+      } catch {
+        console.log('[Gemini] Pass 3 - Verification pass failed, using original results')
       }
+    }
 
-      // Normalize to our schema
-      const products: ExtractedProductData[] = items.map((item: Record<string, unknown>) => {
-        const productName = String(item.productName || 'Unknown')
-        const brandName = String(item.brandName || productName)
-        return {
-          brandName,
-          productName,
-          gmv: parseGmv(String(item.gmv || '0')),
-          itemsSold: parseInt(String(item.itemsSold || '0').replace(/[^0-9]/g, '')) || 0,
-          confidence: normalizeConfidenceToNumber(String(item.confidence || 'medium')),
-          notes: item.notes ? String(item.notes) : null
-        }
-      })
-
-      console.log('[Gemini] Final extraction:', products.length, 'products')
-
+    // Normalize to our schema
+    const products: ExtractedProductData[] = items.map((item: Record<string, unknown>) => {
+      const productName = String(item.productName || 'Unknown')
+      const brandName = String(item.brandName || productName)
       return {
-        success: true,
-        products,
-        rawExtraction: rawText
+        brandName,
+        productName,
+        gmv: parseGmv(String(item.gmv || '0')),
+        itemsSold: parseInt(String(item.itemsSold || '0').replace(/[^0-9]/g, '')) || 0,
+        confidence: normalizeConfidenceToNumber(String(item.confidence || 'medium')),
+        notes: item.notes ? String(item.notes) : null
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.error('[Gemini] Error:', errorMessage)
-      return {
-        success: false,
-        products: [],
-        rawExtraction: '',
-        error: errorMessage
-      }
+    })
+
+    console.log('[Gemini] Final extraction:', products.length, 'products')
+
+    return {
+      success: true,
+      products,
+      rawExtraction: rawText
     }
   }
 
@@ -315,6 +369,10 @@ interface GeminiFile {
 
 // Mock provider for development
 export class MockAnalysisProvider implements AnalysisProvider {
+  async analyzeVideoFromUrl(_url: string, creatorName: string, filename: string): Promise<AnalysisResult> {
+    return this.analyzeVideo('', creatorName, filename)
+  }
+
   async analyzeVideo(_filePath: string, creatorName: string, filename: string): Promise<AnalysisResult> {
     console.log('[Mock] Analyzing video for:', creatorName)
 
