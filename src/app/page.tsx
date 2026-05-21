@@ -44,9 +44,16 @@ export default function CreatorUploadPage() {
     const files = e.target.files
     if (files && files.length > 0) {
       const validFiles: File[] = []
+      const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.m4v', '.mpeg', '.mpg', '.3gp', '.mkv', '.ogg', '.wmv']
+
       for (let i = 0; i < files.length; i++) {
-        if (files[i].type.startsWith('video/')) {
-          validFiles.push(files[i])
+        const file = files[i]
+        const hasVideoType = file.type.startsWith('video/') || file.type === 'application/octet-stream'
+        const hasVideoExtension = videoExtensions.some(ext => file.name.toLowerCase().endsWith(ext))
+
+        // Accept if MIME type is video OR if extension is a video extension
+        if (hasVideoType || hasVideoExtension) {
+          validFiles.push(file)
         }
       }
       if (validFiles.length === 0) {
