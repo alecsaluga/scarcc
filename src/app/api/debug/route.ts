@@ -32,13 +32,24 @@ export async function GET() {
     results.blobList = { status: 'ERROR', error: e instanceof Error ? e.message : String(e) }
   }
 
-  // Check 4: Blob storage - try to upload a tiny test file (private access for private stores)
+  // Check 4: Blob storage - try to upload a tiny test file
   try {
     const testContent = `Test file created at ${new Date().toISOString()}`
-    const blob = await put('debug-test.txt', testContent, {
-      addRandomSuffix: true,
-    })
-    results.blobUpload = { status: 'OK', url: blob.url }
+    // Try private first (for private stores), fall back to public
+    try {
+      const blob = await put('debug-test.txt', testContent, {
+        access: 'public',
+        addRandomSuffix: true,
+      })
+      results.blobUpload = { status: 'OK (public)', url: blob.url }
+    } catch (publicError) {
+      // Store might be private-only, which is fine
+      results.blobUpload = {
+        status: 'PRIVATE_STORE',
+        note: 'Store is private - need to reconfigure as public for video analysis',
+        error: publicError instanceof Error ? publicError.message : String(publicError)
+      }
+    }
   } catch (e) {
     results.blobUpload = { status: 'ERROR', error: e instanceof Error ? e.message : String(e) }
   }
