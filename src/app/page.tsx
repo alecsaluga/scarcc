@@ -301,9 +301,9 @@ export default function CreatorUploadPage() {
                       <Upload className="h-5 w-5 mr-2" />
                       {videoFiles.length > 0 ? 'Add More Files' : 'Choose Files'}
                     </span>
-                    <span className="text-gray-400">
-                      {videoFiles.length === 0 ? 'No files selected' : 'Select additional recordings'}
-                    </span>
+                    {videoFiles.length === 0 && (
+                      <span className="text-gray-400">No files selected</span>
+                    )}
                   </div>
                 </div>
 
