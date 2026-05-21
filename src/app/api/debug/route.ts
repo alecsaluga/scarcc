@@ -32,11 +32,10 @@ export async function GET() {
     results.blobList = { status: 'ERROR', error: e instanceof Error ? e.message : String(e) }
   }
 
-  // Check 4: Blob storage - try to upload a tiny test file
+  // Check 4: Blob storage - try to upload a tiny test file (private access for private stores)
   try {
     const testContent = `Test file created at ${new Date().toISOString()}`
     const blob = await put('debug-test.txt', testContent, {
-      access: 'public',
       addRandomSuffix: true,
     })
     results.blobUpload = { status: 'OK', url: blob.url }
