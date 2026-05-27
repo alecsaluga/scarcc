@@ -36,21 +36,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       request,
       onBeforeGenerateToken: async (pathname) => {
         console.log('[Upload Token] onBeforeGenerateToken called for:', pathname)
+        // Allow any content type - mobile devices use many different MIME types
         return {
-          allowedContentTypes: [
-            'video/mp4',
-            'video/quicktime',
-            'video/webm',
-            'video/x-msvideo',
-            'video/x-m4v',
-            'video/mpeg',
-            'video/3gpp',
-            'video/3gpp2',
-            'video/x-matroska',
-            'video/ogg',
-            'video/x-ms-wmv',
-            'application/octet-stream', // Fallback for unknown types
-          ],
           maximumSizeInBytes: 500 * 1024 * 1024, // 500MB max
         }
       },
