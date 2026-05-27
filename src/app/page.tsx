@@ -39,33 +39,72 @@ export default function CreatorUploadPage() {
   const [result, setResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [currentFileIndex, setCurrentFileIndex] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.m4v', '.mpeg', '.mpg', '.3gp', '.mkv', '.ogg', '.wmv']
+
+  const validateAndAddFiles = (files: FileList | File[]) => {
+    const fileArray = Array.from(files)
+    const validFiles: File[] = []
+
+    for (const file of fileArray) {
+      const hasVideoType = file.type.startsWith('video/') || file.type === 'application/octet-stream'
+      const hasVideoExtension = videoExtensions.some(ext => file.name.toLowerCase().endsWith(ext))
+
+      if (hasVideoType || hasVideoExtension) {
+        validFiles.push(file)
+      }
+    }
+
+    if (validFiles.length === 0) {
+      setError('Please select video files only')
+      return
+    }
+
+    setVideoFiles(prev => [...prev, ...validFiles])
+    setError(null)
+  }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files && files.length > 0) {
-      const validFiles: File[] = []
-      const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.m4v', '.mpeg', '.mpg', '.3gp', '.mkv', '.ogg', '.wmv']
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        const hasVideoType = file.type.startsWith('video/') || file.type === 'application/octet-stream'
-        const hasVideoExtension = videoExtensions.some(ext => file.name.toLowerCase().endsWith(ext))
-
-        // Accept if MIME type is video OR if extension is a video extension
-        if (hasVideoType || hasVideoExtension) {
-          validFiles.push(file)
-        }
-      }
-      if (validFiles.length === 0) {
-        setError('Please select video files only')
-        return
-      }
-      setVideoFiles(prev => [...prev, ...validFiles])
-      setError(null)
+      validateAndAddFiles(files)
       // Reset input so same file can be selected again
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
+    }
+  }
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (uploadState === 'idle') {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    if (uploadState !== 'idle') return
+
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      validateAndAddFiles(files)
     }
   }
 
@@ -281,12 +320,16 @@ export default function CreatorUploadPage() {
                     </div>
                   )}
 
-                  {/* Add more files button */}
+                  {/* Drag & drop / file select area */}
                   <div
                     className={`creator-file-upload ${
                       uploadState !== 'idle' ? 'pointer-events-none opacity-50' : ''
-                    }`}
+                    } ${isDragging ? 'border-brand-500 bg-brand-50' : ''}`}
                     onClick={() => uploadState === 'idle' && fileInputRef.current?.click()}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
                   >
                     <input
                       ref={fileInputRef}
@@ -299,10 +342,10 @@ export default function CreatorUploadPage() {
                     />
                     <span className="creator-file-upload-button">
                       <Upload className="h-5 w-5 mr-2" />
-                      {videoFiles.length > 0 ? 'Add More Files' : 'Choose Files'}
+                      {isDragging ? 'Drop files here' : videoFiles.length > 0 ? 'Add More Files' : 'Choose Files'}
                     </span>
-                    {videoFiles.length === 0 && (
-                      <span className="text-gray-400">No files selected</span>
+                    {!isDragging && videoFiles.length === 0 && (
+                      <span className="text-gray-400">or drag and drop</span>
                     )}
                   </div>
                 </div>
