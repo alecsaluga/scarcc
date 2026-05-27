@@ -142,17 +142,29 @@ export default function CreatorUploadPage() {
         setCurrentFileIndex(i)
         const file = videoFiles[i]
 
-        const blob = await upload(file.name, file, {
-          access: 'public',
-          handleUploadUrl: '/api/upload-token',
-        })
+        // Sanitize filename - remove special characters that might cause issues
+        const sanitizedName = file.name
+          .replace(/[+]/g, '_')
+          .replace(/\s+/g, '_')
+          .replace(/[^a-zA-Z0-9._-]/g, '')
 
-        uploadedBlobs.push({
-          url: blob.url,
-          filename: file.name,
-          size: file.size,
-          contentType: file.type || 'video/mp4',
-        })
+        try {
+          const blob = await upload(sanitizedName || `video_${i}.mp4`, file, {
+            access: 'public',
+            handleUploadUrl: '/api/upload-token',
+          })
+
+          uploadedBlobs.push({
+            url: blob.url,
+            filename: file.name,
+            size: file.size,
+            contentType: file.type || 'video/mp4',
+          })
+        } catch (uploadError) {
+          console.error('Blob upload error:', uploadError)
+          const errorMessage = uploadError instanceof Error ? uploadError.message : 'Upload failed'
+          throw new Error(`Failed to upload ${file.name}: ${errorMessage}`)
+        }
       }
 
       // Step 2: Send blob URLs to process API for analysis
