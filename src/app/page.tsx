@@ -142,14 +142,18 @@ export default function CreatorUploadPage() {
         setCurrentFileIndex(i)
         const file = videoFiles[i]
 
-        // Sanitize filename - remove special characters that might cause issues
-        const sanitizedName = file.name
-          .replace(/[+]/g, '_')
-          .replace(/\s+/g, '_')
-          .replace(/[^a-zA-Z0-9._-]/g, '')
+        // Generate a completely safe filename for upload
+        // Mobile devices often have problematic filenames with special characters
+        const getExtension = (filename: string): string => {
+          const lastDot = filename.lastIndexOf('.')
+          if (lastDot === -1) return '.mp4'
+          const ext = filename.substring(lastDot).toLowerCase()
+          return videoExtensions.includes(ext) ? ext : '.mp4'
+        }
+        const safeFilename = `video_${Date.now()}_${i}${getExtension(file.name)}`
 
         try {
-          const blob = await upload(sanitizedName || `video_${i}.mp4`, file, {
+          const blob = await upload(safeFilename, file, {
             access: 'public',
             handleUploadUrl: '/api/upload-token',
           })
