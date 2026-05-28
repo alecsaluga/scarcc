@@ -186,7 +186,21 @@ export default function CreatorUploadPage() {
         }),
       })
 
-      const data = await response.json()
+      // Handle timeout and other server errors
+      if (response.status === 504) {
+        throw new Error('Analysis timed out. Please try uploading fewer or shorter videos.')
+      }
+
+      if (response.status >= 500) {
+        throw new Error('Server error. Please try again in a moment.')
+      }
+
+      let data
+      try {
+        data = await response.json()
+      } catch {
+        throw new Error('Server returned an invalid response. Please try again.')
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Processing failed')
@@ -391,6 +405,9 @@ export default function CreatorUploadPage() {
                       {uploadState === 'uploading'
                         ? `Uploading video ${currentFileIndex + 1} of ${videoFiles.length}...`
                         : `Analyzing products across ${videoFiles.length} recording${videoFiles.length !== 1 ? 's' : ''}...`}
+                    </p>
+                    <p className="text-xs text-gray-400 text-center mt-2">
+                      This usually takes about a minute per video. Please keep this page open.
                     </p>
                   </div>
                 )}
