@@ -6,7 +6,7 @@ import { checkVideoDuplicate, processExtractedProducts, createOpportunitiesFromP
 import { generateTasksForOpportunity } from '@/lib/task-service'
 import { generateSlug } from '@/lib/utils'
 
-export const maxDuration = 60 // Allow up to 60 seconds on Pro, 10 on Hobby
+export const maxDuration = 300 // 5 minutes max for Pro plan
 
 interface VideoBlob {
   url: string
