@@ -142,15 +142,15 @@ export default function CreatorUploadPage() {
         setCurrentFileIndex(i)
         const file = videoFiles[i]
 
-        // Generate a completely safe filename for upload
-        // Mobile devices often have problematic filenames with special characters
-        const getExtension = (filename: string): string => {
-          const lastDot = filename.lastIndexOf('.')
-          if (lastDot === -1) return '.mp4'
-          const ext = filename.substring(lastDot).toLowerCase()
-          return videoExtensions.includes(ext) ? ext : '.mp4'
-        }
-        const safeFilename = `video_${Date.now()}_${i}${getExtension(file.name)}`
+        // Generate a simple safe filename
+        const safeFilename = `upload_${Date.now()}_${i}.mp4`
+
+        console.log('[Upload] Starting upload:', {
+          originalName: file.name,
+          safeFilename,
+          size: file.size,
+          type: file.type,
+        })
 
         try {
           const blob = await upload(safeFilename, file, {
@@ -158,16 +158,31 @@ export default function CreatorUploadPage() {
             handleUploadUrl: '/api/upload-token',
           })
 
+          console.log('[Upload] Success:', blob.url)
+
           uploadedBlobs.push({
             url: blob.url,
             filename: file.name,
             size: file.size,
             contentType: file.type || 'video/mp4',
           })
-        } catch (uploadError) {
-          console.error('Blob upload error:', uploadError)
-          const errorMessage = uploadError instanceof Error ? uploadError.message : 'Upload failed'
-          throw new Error(`Failed to upload ${file.name}: ${errorMessage}`)
+        } catch (uploadError: unknown) {
+          console.error('[Upload] Full error:', uploadError)
+          console.error('[Upload] Error type:', typeof uploadError)
+          console.error('[Upload] Error constructor:', (uploadError as Error)?.constructor?.name)
+
+          // Get more details from the error
+          let errorMessage = 'Upload failed'
+          if (uploadError instanceof Error) {
+            errorMessage = uploadError.message
+            console.error('[Upload] Error stack:', uploadError.stack)
+          } else if (typeof uploadError === 'string') {
+            errorMessage = uploadError
+          } else {
+            errorMessage = JSON.stringify(uploadError)
+          }
+
+          throw new Error(`Upload failed: ${errorMessage}`)
         }
       }
 
