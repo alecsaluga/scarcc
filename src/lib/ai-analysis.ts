@@ -42,18 +42,24 @@ export class GeminiAnalysisProvider implements AnalysisProvider {
       const uploadedFile = await this.uploadFileToGemini(fileBuffer, mimeType)
       console.log('[Gemini] File uploaded:', uploadedFile.name)
 
-      // Poll until file is ACTIVE
+      // Poll until file is ACTIVE (check every 1 second, max 60 seconds)
       let fileStatus = uploadedFile
+      let pollCount = 0
+      const maxPolls = 60
       while (!fileStatus.state || fileStatus.state.toString() !== 'ACTIVE') {
         if (fileStatus.state && fileStatus.state.toString() === 'FAILED') {
           throw new Error('Gemini could not process this uploaded video.')
         }
+        if (pollCount >= maxPolls) {
+          throw new Error('Video processing timed out. Try a shorter video.')
+        }
 
-        console.log('[Gemini] Waiting for file to become ACTIVE...')
-        await sleep(5000)
+        console.log('[Gemini] Waiting for file to become ACTIVE... (poll', pollCount + 1, ')')
+        await sleep(1000)
         fileStatus = await this.getGeminiFile(uploadedFile.name)
+        pollCount++
       }
-      console.log('[Gemini] File is ACTIVE, starting extraction...')
+      console.log('[Gemini] File is ACTIVE after', pollCount, 'polls, starting extraction...')
 
       // Use shared extraction logic
       return this.runExtraction(fileStatus, creatorName, filename)
@@ -91,18 +97,24 @@ export class GeminiAnalysisProvider implements AnalysisProvider {
       const uploadedFile = await this.uploadFileToGemini(fileBuffer, mimeType)
       console.log('[Gemini] File uploaded:', uploadedFile.name)
 
-      // Poll until file is ACTIVE
+      // Poll until file is ACTIVE (check every 1 second, max 60 seconds)
       let fileStatus = uploadedFile
+      let pollCount = 0
+      const maxPolls = 60
       while (!fileStatus.state || fileStatus.state.toString() !== 'ACTIVE') {
         if (fileStatus.state && fileStatus.state.toString() === 'FAILED') {
           throw new Error('Gemini could not process this uploaded video.')
         }
+        if (pollCount >= maxPolls) {
+          throw new Error('Video processing timed out. Try a shorter video.')
+        }
 
-        console.log('[Gemini] Waiting for file to become ACTIVE...')
-        await sleep(5000)
+        console.log('[Gemini] Waiting for file to become ACTIVE... (poll', pollCount + 1, ')')
+        await sleep(1000)
         fileStatus = await this.getGeminiFile(uploadedFile.name)
+        pollCount++
       }
-      console.log('[Gemini] File is ACTIVE, starting extraction...')
+      console.log('[Gemini] File is ACTIVE after', pollCount, 'polls, starting extraction...')
 
       // Use the same extraction logic as analyzeVideo
       return this.runExtraction(fileStatus, creatorName, filename)
@@ -119,107 +131,41 @@ export class GeminiAnalysisProvider implements AnalysisProvider {
   }
 
   private async runExtraction(fileStatus: GeminiFile, creatorName: string, filename: string): Promise<AnalysisResult> {
-    // PASS 1: Count products first
-    const countPrompt = `
-Watch this entire TikTok Shop analytics screen recording from start to finish.
-Count the TOTAL number of unique product listings that appear as the creator scrolls.
-Each row in the analytics dashboard = 1 product.
+    // Single-pass extraction for speed
+    console.log('[Gemini] Running single-pass extraction...')
 
-Return ONLY a JSON object with the count:
-{"totalProducts": <number>}
-
-Watch the ENTIRE video - products appear throughout as the user scrolls.
-`.trim()
-
-    const countResponse = await this.callGemini(fileStatus, countPrompt)
-    let expectedCount = 0
-    try {
-      const countParsed = this.parseJsonResponse(countResponse)
-      expectedCount = (countParsed as { totalProducts?: number }).totalProducts || 0
-      console.log('[Gemini] Pass 1 - Expected product count:', expectedCount)
-    } catch {
-      console.log('[Gemini] Could not parse count, proceeding with extraction')
-    }
-
-    // PASS 2: Extract all products
     const extractPrompt = `
 You are extracting e-commerce product analytics from a TikTok Shop creator's screen recording.
 
-Watch the ENTIRE video from start to finish. This is a SCROLLING recording - products appear and disappear as the creator scrolls through their analytics dashboard.
+Watch the ENTIRE video. This is a SCROLLING recording - products appear as the creator scrolls through their analytics.
 
-Return strict JSON as an array of objects. ALWAYS return an array.
-
-Each object must use this shape:
+Return strict JSON as an array. Each object:
 {
-  "brandName": "string (the ACTUAL BRAND/COMPANY name - see rules below)",
-  "productName": "string (FULL exact product name as displayed - DO NOT truncate)",
-  "gmv": "string (gross merchandise value with currency symbol, e.g. '$539.2K')",
-  "itemsSold": "string (number of units sold)",
+  "brandName": "string (actual brand/company name, NOT product description)",
+  "productName": "string (FULL exact product name)",
+  "gmv": "string (e.g. '$539.2K')",
+  "itemsSold": "string",
   "confidence": "high|medium|low",
-  "notes": "short string"
+  "notes": "string or null"
 }
 
-BRAND NAME RULES (CRITICAL):
-- brandName must be the ACTUAL COMPANY/MANUFACTURER name, NOT a product description
-- WRONG: "Electric Scooter", "Portable Mini Air Pump", "Automatic Bread Maker" (these are product types, NOT brands)
-- RIGHT: "Shark", "Ninja", "Dyson", "VEVOR", "KitchenAid", "Rhino USA", "GCI Outdoor"
-- Look for the brand at the START of the product name (e.g., "Shark StainForce..." → brand is "Shark")
-- If no clear brand is visible, look for seller/shop name or use "Unknown"
+BRAND RULES:
+- Extract the actual brand (Shark, Ninja, Dyson, VEVOR, etc.)
+- Look at the START of product names for brand
+- If unclear, use "Unknown"
 
-EXTRACTION RULES:
-1. FULL PRODUCT NAMES - Include the COMPLETE product name exactly as shown
-2. GMV values - preserve exact format (e.g., "$539.2K", "$44.8K")
-3. Each unique product row = one object in the array
+Creator: "${creatorName}" | File: "${filename}"
 
-The creator name is "${creatorName}".
-The source file is "${filename}".
-
-Return ALL products visible in the video as a JSON array.
+Return ALL products as a JSON array.
 `.trim()
 
     const rawText = await this.callGemini(fileStatus, extractPrompt)
-    console.log('[Gemini] Pass 2 - Raw response:', rawText.substring(0, 200) + '...')
+    console.log('[Gemini] Raw response:', rawText.substring(0, 200) + '...')
 
     // Parse JSON response
     const parsed = this.parseJsonResponse(rawText)
-    let items = Array.isArray(parsed) ? parsed : [parsed]
-    console.log('[Gemini] Pass 2 - Extracted', items.length, 'products')
-
-    // PASS 3: Verification - if count mismatch, do another pass to find missing
-    if (expectedCount > 0 && items.length < expectedCount * 0.8) {
-      console.log('[Gemini] Pass 3 - Count mismatch! Expected ~' + expectedCount + ', got ' + items.length + '. Running verification pass...')
-
-      const existingNames = items.map((i: Record<string, unknown>) => String(i.productName || '')).slice(0, 20)
-      const verifyPrompt = `
-I already extracted ${items.length} products but the video appears to have approximately ${expectedCount} products.
-
-Products I already found (first 20):
-${existingNames.join('\n')}
-
-Please watch the video again and find ANY PRODUCTS I MISSED. Focus on:
-- Products that appear briefly during scrolling
-- Products at the very beginning or end of the video
-- Products that might have been partially visible
-
-Return ONLY the MISSING products as a JSON array (same format as before):
-[{"brandName": "...", "productName": "...", "gmv": "...", "itemsSold": "...", "confidence": "...", "notes": "..."}]
-
-If no additional products are found, return an empty array: []
-`.trim()
-
-      try {
-        const verifyText = await this.callGemini(fileStatus, verifyPrompt)
-        const verifyParsed = this.parseJsonResponse(verifyText)
-        const additionalItems = Array.isArray(verifyParsed) ? verifyParsed : []
-
-        if (additionalItems.length > 0) {
-          console.log('[Gemini] Pass 3 - Found', additionalItems.length, 'additional products')
-          items = [...items, ...additionalItems]
-        }
-      } catch {
-        console.log('[Gemini] Pass 3 - Verification pass failed, using original results')
-      }
-    }
+    const items = Array.isArray(parsed) ? parsed : [parsed]
+    console.log('[Gemini] Extracted', items.length, 'products')
 
     // Normalize to our schema
     const products: ExtractedProductData[] = items.map((item: Record<string, unknown>) => {

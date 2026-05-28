@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Upload, Video, CheckCircle, AlertCircle, X } from 'lucide-react'
@@ -42,6 +42,46 @@ export default function CreatorUploadPage() {
   const [isDragging, setIsDragging] = useState(false)
 
   const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.m4v', '.mpeg', '.mpg', '.3gp', '.mkv', '.ogg', '.wmv']
+
+  // Full-page drag and drop
+  useEffect(() => {
+    const handleWindowDragOver = (e: DragEvent) => {
+      e.preventDefault()
+      if (uploadState === 'idle') {
+        setIsDragging(true)
+      }
+    }
+
+    const handleWindowDragLeave = (e: DragEvent) => {
+      e.preventDefault()
+      // Only set to false if leaving the window
+      if (e.relatedTarget === null) {
+        setIsDragging(false)
+      }
+    }
+
+    const handleWindowDrop = (e: DragEvent) => {
+      e.preventDefault()
+      setIsDragging(false)
+
+      if (uploadState !== 'idle') return
+
+      const files = e.dataTransfer?.files
+      if (files && files.length > 0) {
+        validateAndAddFiles(files)
+      }
+    }
+
+    window.addEventListener('dragover', handleWindowDragOver)
+    window.addEventListener('dragleave', handleWindowDragLeave)
+    window.addEventListener('drop', handleWindowDrop)
+
+    return () => {
+      window.removeEventListener('dragover', handleWindowDragOver)
+      window.removeEventListener('dragleave', handleWindowDragLeave)
+      window.removeEventListener('drop', handleWindowDrop)
+    }
+  }, [uploadState])
 
   const validateAndAddFiles = (files: FileList | File[]) => {
     const fileArray = Array.from(files)
@@ -248,9 +288,20 @@ export default function CreatorUploadPage() {
   const totalSize = videoFiles.reduce((sum, f) => sum + f.size, 0)
 
   return (
-    <div className="creator-shell min-h-screen bg-white flex items-center justify-center p-5">
-      <div className="w-full max-w-[680px]">
-        <div className="creator-panel">
+    <>
+      {/* Full-page drop overlay */}
+      {isDragging && uploadState === 'idle' && (
+        <div className="fixed inset-0 bg-brand-500/20 backdrop-blur-sm z-50 flex items-center justify-center pointer-events-none">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl border-4 border-dashed border-brand-500">
+            <Upload className="h-16 w-16 text-brand-500 mx-auto mb-4" />
+            <p className="text-xl font-bold text-gray-900">Drop your videos here</p>
+          </div>
+        </div>
+      )}
+
+      <div className="creator-shell min-h-screen bg-white flex items-center justify-center p-5">
+        <div className="w-full max-w-[680px]">
+          <div className="creator-panel">
           {/* Logo */}
           <div className="creator-brand-header">
             <Image
@@ -429,8 +480,9 @@ export default function CreatorUploadPage() {
               </form>
             </>
           )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
