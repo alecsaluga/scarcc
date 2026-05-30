@@ -229,7 +229,7 @@ export default function CreatorUploadPage() {
       // Step 2: Send blob URLs to process API for analysis
       setUploadState('analyzing')
 
-      const response = await fetch('/api/process', {
+      const response = await fetch('/api/process?v=' + Date.now(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -241,20 +241,29 @@ export default function CreatorUploadPage() {
         }),
       })
 
-      // Handle timeout and other server errors
+      console.log('[Process] Response status:', response.status)
+
+      // Get response text first to debug
+      const responseText = await response.text()
+      console.log('[Process] Response:', responseText.substring(0, 500))
+
+      // Handle timeout
       if (response.status === 504) {
-        throw new Error('Analysis timed out. Please try uploading fewer or shorter videos.')
+        throw new Error('Server timeout. Try with 1 short video.')
       }
 
+      // Handle server errors
       if (response.status >= 500) {
-        throw new Error('Server error. Please try again in a moment.')
+        throw new Error(`Server error (${response.status}): ${responseText.substring(0, 200)}`)
       }
 
+      // Parse JSON
       let data
       try {
-        data = await response.json()
-      } catch {
-        throw new Error('Server returned an invalid response. Please try again.')
+        data = JSON.parse(responseText)
+      } catch (e) {
+        console.error('[Process] JSON parse error:', e)
+        throw new Error(`Server returned invalid response: ${responseText.substring(0, 200)}`)
       }
 
       if (!response.ok) {
