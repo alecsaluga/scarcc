@@ -415,8 +415,7 @@ export default function PortalPage() {
                       and negotiate deals on my behalf.
                     </p>
                     <p className="mb-2">
-                      I understand that final deal acceptance requires my approval
-                      and that RetainerGoat takes a 30% commission on closed deals.
+                      I understand that final deal acceptance requires my approval.
                     </p>
                   </div>
 
@@ -501,13 +500,24 @@ export default function PortalPage() {
               <Badge variant="blue">{brandTableData.length} Products</Badge>
             </div>
 
-            <p className="question-copy mb-6">
-              Check any brands you have existing deals with. All fields are optional.
-            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <p className="text-sm text-blue-900 font-medium mb-2">
+                📋 What we need from you:
+              </p>
+              <ul className="text-sm text-blue-800 space-y-1 ml-4 list-disc">
+                <li><strong>Retainer deals:</strong> Check if you have an existing monthly retainer with this brand</li>
+                <li><strong>Usage rights:</strong> Check if the brand can repost/use your content</li>
+                <li><strong>Contact info:</strong> If you have a direct contact at the brand, add their email or handle</li>
+              </ul>
+              <p className="text-xs text-blue-700 mt-2">
+                💡 All fields are optional. Scroll right to see more columns →
+              </p>
+            </div>
 
             {error && <div className="form-alert mb-4">{error}</div>}
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto relative">
+              <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white to-transparent pointer-events-none z-10"></div>
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="border-b border-gray-200">

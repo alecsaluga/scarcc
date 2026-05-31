@@ -38,9 +38,9 @@ export async function processExtractedProducts(
     })
 
     if (existing) {
-      // Merge with existing - preserve stronger values
-      const updatedGmv = Math.max(existing.gmv, product.gmv)
-      const updatedItemsSold = Math.max(existing.itemsSold, product.itemsSold)
+      // Merge with existing - sum GMV and items sold across videos
+      const updatedGmv = existing.gmv + product.gmv
+      const updatedItemsSold = existing.itemsSold + product.itemsSold
       const updatedConfidence = Math.max(existing.confidence, product.confidence)
       const updatedNotes = product.notes || existing.notes
       // Use new brandName if provided (AI extraction), otherwise keep existing
