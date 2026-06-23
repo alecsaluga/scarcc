@@ -43,14 +43,43 @@ export async function POST(req: NextRequest) {
       const bcrypt = await import('bcryptjs')
       const passwordHash = await bcrypt.hash(tempPassword, 10)
 
+      // Create portal credentials - set to step 2 so they go straight to brand review
       await prisma.portalCredential.create({
         data: {
           creatorId: creator.id,
           passwordHash,
-          onboardingStep: 1,
+          onboardingStep: 2, // Skip setup form, go straight to brand review
           onboardingComplete: false,
         },
       })
+
+      // Create agreement record so they don't need to accept it again
+      await prisma.agreement.upsert({
+        where: { creatorId: creator.id },
+        update: {
+          acceptedAt: new Date(),
+          version: '1.0',
+          agreementText: 'Authorization agreement accepted via admin portal setup',
+        },
+        create: {
+          creatorId: creator.id,
+          acceptedAt: new Date(),
+          version: '1.0',
+          agreementText: 'Authorization agreement accepted via admin portal setup',
+        },
+      })
+    } else {
+      // Creator already has credentials - make sure they're at step 2 and not marked complete
+      // This handles re-sending after adding more products
+      if (creator.portalCredential.onboardingStep < 2 || creator.portalCredential.onboardingComplete) {
+        await prisma.portalCredential.update({
+          where: { creatorId: creator.id },
+          data: {
+            onboardingStep: 2,
+            onboardingComplete: false, // Reset so they can review new products
+          },
+        })
+      }
     }
 
     // Mark all videos as reviewed
