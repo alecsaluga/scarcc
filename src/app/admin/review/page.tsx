@@ -75,6 +75,11 @@ export default function AdminReviewPage() {
   // Send email state
   const [sending, setSending] = useState(false)
   const [sendSuccess, setSendSuccess] = useState<string | null>(null)
+  const [sendResult, setSendResult] = useState<{
+    creatorId: string
+    portalUrl: string
+    tempPassword?: string
+  } | null>(null)
 
   async function loadCreators() {
     try {
@@ -203,8 +208,13 @@ export default function AdminReviewPage() {
       })
 
       if (response.ok) {
+        const result = await response.json()
         setSendSuccess(creator.id)
-        setTimeout(() => setSendSuccess(null), 3000)
+        setSendResult({
+          creatorId: creator.id,
+          portalUrl: result.portalUrl,
+          tempPassword: result.tempPassword,
+        })
         loadCreators()
       } else {
         const error = await response.json()
@@ -536,6 +546,77 @@ export default function AdminReviewPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Send Result Modal */}
+      <Modal
+        isOpen={!!sendResult}
+        onClose={() => setSendResult(null)}
+        title="Ready to Send to Creator"
+        size="md"
+      >
+        {sendResult && (
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-green-800 font-medium">Videos marked as reviewed!</p>
+              <p className="text-green-700 text-sm mt-1">
+                Send the following info to the creator:
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Portal URL</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={sendResult.portalUrl}
+                    className="flex-1 px-3 py-2 border rounded-lg bg-gray-50 text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(sendResult.portalUrl)
+                      alert('Copied!')
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+
+              {sendResult.tempPassword && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Temporary Password</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={sendResult.tempPassword}
+                      className="flex-1 px-3 py-2 border rounded-lg bg-gray-50 text-sm font-mono"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(sendResult.tempPassword!)
+                        alert('Copied!')
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <Button className="w-full" onClick={() => setSendResult(null)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* CSV Upload Modal */}

@@ -95,8 +95,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Email sent (logged to console)',
+      message: 'Ready to send to creator',
       portalUrl,
+      tempPassword: tempPassword || undefined,
       opportunitiesCount: creator.opportunities.length,
     })
   } catch (error) {
