@@ -274,11 +274,11 @@ export default function AdminReviewPage() {
                         <CardTitle className="text-lg">{creator.name}</CardTitle>
                         <p className="text-sm text-gray-500">@{creator.tiktokHandle}</p>
                       </div>
-                      <Badge variant="secondary">
+                      <Badge variant="blue">
                         {pendingVideos.length} video{pendingVideos.length !== 1 ? 's' : ''}
                       </Badge>
                       {creator.extractedProducts.length > 0 && (
-                        <Badge variant="success">
+                        <Badge variant="green">
                           {creator.extractedProducts.length} product{creator.extractedProducts.length !== 1 ? 's' : ''} entered
                         </Badge>
                       )}
@@ -314,7 +314,7 @@ export default function AdminReviewPage() {
                               <p className="text-sm font-medium truncate flex-1 mr-2">
                                 {video.filename}
                               </p>
-                              <Badge variant={video.status === 'PENDING_REVIEW' ? 'warning' : 'success'} className="text-xs">
+                              <Badge variant={video.status === 'PENDING_REVIEW' ? 'yellow' : 'green'} className="text-xs">
                                 {video.status === 'PENDING_REVIEW' ? 'Pending' : 'Reviewed'}
                               </Badge>
                             </div>

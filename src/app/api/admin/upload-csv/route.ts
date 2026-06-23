@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Split by comma, handling quoted values
-      const parts = trimmedLine.split(',').map((p) => p.trim().replace(/^["']|["']$/g, ''))
+      const parts = trimmedLine.split(',').map((p: string) => p.trim().replace(/^["']|["']$/g, ''))
 
       if (parts.length < 2) continue
 
