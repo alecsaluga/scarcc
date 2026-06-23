@@ -9,10 +9,12 @@ import {
   Users,
   Kanban,
   Truck,
+  ClipboardCheck,
 } from 'lucide-react'
 
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/admin/review', label: 'Review', icon: ClipboardCheck },
   { href: '/admin/late-stage', label: 'Late Stage', icon: Kanban },
   { href: '/admin/closed-delivery', label: 'Delivery', icon: Truck },
 ]
@@ -58,7 +60,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 })}
               </div>
             </div>
-            <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">
+            <Link href="/get-started" className="text-sm text-gray-500 hover:text-gray-700">
               Creator Upload
             </Link>
           </div>
