@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+
 // Get all creators with pending review videos
 export async function GET() {
   try {
+    console.log('Fetching pending creators...')
+
     const creators = await prisma.creator.findMany({
       where: {
         uploadedVideos: {
@@ -24,6 +29,8 @@ export async function GET() {
       },
       orderBy: { createdAt: 'desc' },
     })
+
+    console.log('Found creators with pending videos:', creators.length)
 
     // Also get standalone extracted products (not linked to opportunities yet)
     const creatorsWithProducts = await Promise.all(
